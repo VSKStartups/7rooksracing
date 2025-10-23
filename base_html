@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KartTime - Racer Login</title>
+
+  <style>
+    body {
+      font-family: "Inter", sans-serif;
+      background-color: #0a0a0a;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      overflow: hidden;
+    }
+    .container {
+      width: 90%;
+      max-width: 380px;
+      background: #141414;
+      border-radius: 20px;
+      padding: 2rem;
+      text-align: center;
+      box-shadow: 0 0 30px rgba(255, 107, 53, 0.2);
+    }
+    h1 {
+      font-size: 2rem;
+      color: #ff6b35;
+      margin-bottom: 1.5rem;
+    }
+    input {
+      width: 100%;
+      padding: 0.8rem;
+      border-radius: 8px;
+      border: none;
+      margin-bottom: 1rem;
+      font-size: 1rem;
+    }
+    button {
+      width: 100%;
+      padding: 0.8rem;
+      background-color: #ff6b35;
+      border: none;
+      color: white;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: background 0.3s ease;
+    }
+    button:hover {
+      background-color: #ff834f;
+    }
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      background-color: #222;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      opacity: 0;
+      transform: translateY(30px);
+      transition: all 0.4s ease;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .otp-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      justify-content: center;
+      align-items: center;
+    }
+    .otp-modal.active {
+      display: flex;
+    }
+    .otp-box {
+      background: #1b1b1b;
+      padding: 2rem;
+      border-radius: 12px;
+      text-align: center;
+      width: 90%;
+      max-width: 350px;
+    }
+    .otp-input {
+      width: 80%;
+      padding: 0.8rem;
+      font-size: 1.1rem;
+      text-align: center;
+      border: 1px solid #333;
+      border-radius: 8px;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container" id="loginContainer">
+    <h1>KartTime 🏁</h1>
+    <p>Enter your phone number to continue</p>
+    <input type="tel" id="phoneInput" placeholder="+60 123456789" />
+    <div id="recaptcha-container"></div>
+    <button id="loginBtn">Send OTP</button>
+  </div>
+
+  <div class="otp-modal" id="otpModal">
+    <div class="otp-box">
+      <h2>Enter OTP</h2>
+      <p>We've sent a 6-digit code to your phone</p>
+      <input type="text" id="otpInput" class="otp-input" maxlength="6" />
+      <button id="otpVerifyBtn">Verify</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- Firebase SDKs -->
+  <script type="module">
+    // 🔑 STEP 1: IMPORT FIREBASE SDKs
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+    import {
+      getAuth,
+      RecaptchaVerifier,
+      signInWithPhoneNumber,
+    } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+
+    // 🔑 STEP 2: ADD YOUR FIREBASE CONFIGURATION HERE
+    // Get these values from Firebase Console → Project Settings → General tab
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY_HERE",               // 🔒 REQUIRED
+      authDomain: "YOUR_AUTH_DOMAIN",            // 🔒 REQUIRED
+      projectId: "YOUR_PROJECT_ID",              // 🔒 REQUIRED
+      storageBucket: "YOUR_STORAGE_BUCKET",      // optional
+      messagingSenderId: "YOUR_SENDER_ID",       // optional
+      appId: "YOUR_APP_ID",                      // 🔒 REQUIRED
+    };
+
+    // ⚙️ Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    // 📞 DOM ELEMENTS
+    const loginBtn = document.getElementById("loginBtn");
+    const phoneInput = document.getElementById("phoneInput");
+    const otpModal = document.getElementById("otpModal");
+    const otpInput = document.getElementById("otpInput");
+    const otpVerifyBtn = document.getElementById("otpVerifyBtn");
+    const toast = document.getElementById("toast");
+
+    // ⚙️ Helper function for toasts
+    const showToast = (msg, error = false) => {
+      toast.textContent = msg;
+      toast.style.backgroundColor = error ? "#c0392b" : "#222";
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3000);
+    };
+
+    // 🔒 STEP 3: SETUP RECAPTCHA VERIFIER
+    // Firebase requires reCAPTCHA for phone auth (invisible mode recommended)
+    window.recaptchaVerifier = new RecaptchaVerifier(
+      "recaptcha-container", // 🔹 Container ID
+      {
+        size: "invisible", // reCAPTCHA won't show visibly
+        callback: (response) => {
+          console.log("reCAPTCHA verified ✅");
+        },
+      },
+      auth
+    );
+
+    // 🚀 STEP 4: SEND OTP VIA FIREBASE
+    loginBtn.addEventListener("click", () => {
+      const phoneNumber = phoneInput.value.trim();
+      if (!phoneNumber.startsWith("+")) {
+        showToast("Include country code, e.g. +60123456789", true);
+        return;
+      }
+
+      signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier)
+        .then((confirmationResult) => {
+          // 🔹 Save confirmation for later verification
+          window.confirmationResult = confirmationResult;
+          otpModal.classList.add("active");
+          showToast("OTP sent! Please check your SMS 📱");
+        })
+        .catch((error) => {
+          console.error(error);
+          showToast("Failed to send OTP: " + error.message, true);
+        });
+    });
+
+    // 🔐 STEP 5: VERIFY OTP
+    otpVerifyBtn.addEventListener("click", () => {
+      const code = otpInput.value.trim();
+      if (!code) {
+        showToast("Enter OTP code", true);
+        return;
+      }
+
+      window.confirmationResult
+        .confirm(code)
+        .then((result) => {
+          const user = result.user;
+          otpModal.classList.remove("active");
+
+          // ✅ Save user data locally (optional)
+          localStorage.setItem("kartUser", JSON.stringify(user));
+
+          // 🎉 Success message
+          showToast("Welcome, Racer! 🏎️");
+
+          // Replace login UI with profile or home
+          document.getElementById("loginContainer").innerHTML = `
+            <h1>Welcome 🏁</h1>
+            <p><strong>Phone:</strong> ${user.phoneNumber}</p>
+            <p><strong>UID:</strong> ${user.uid}</p>
+            <button onclick="logout()">Logout</button>
+          `;
+        })
+        .catch((error) => {
+          console.error(error);
+          showToast("Invalid or expired OTP", true);
+        });
+    });
+
+    // 🔓 Logout function
+    window.logout = () => {
+      localStorage.removeItem("kartUser");
+      location.reload();
+    };
+
+    // 🧠 STEP 6: AUTO-LOGIN IF ALREADY VERIFIED
+    const savedUser = JSON.parse(localStorage.getItem("kartUser"));
+    if (savedUser) {
+      document.getElementById("loginContainer").innerHTML = `
+        <h1>Welcome Back 🏁</h1>
+        <p><strong>Phone:</strong> ${savedUser.phoneNumber}</p>
+        <button onclick="logout()">Logout</button>
+      `;
+    }
+  </script>
+</body>
+</html>
