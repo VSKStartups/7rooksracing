@@ -1,118 +1,236 @@
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import {
-    getAuth,
-    RecaptchaVerifier,
-    signInWithPhoneNumber,
-  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+apiKey: "AIzaSyBVnIJmmXzFyILf13im-y9KfCZrZ8PNpu8",
 
-  // ⭐ Firestore imports
-  import {
-    getFirestore,
-    doc,
-    setDoc,
-    getDoc,
-    serverTimestamp,
-  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_AUTH_DOMAIN",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID",
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  
-  // ⭐ Init Firestore
-  const db = getFirestore(app);
-
-  const loginBtn = document.getElementById("loginBtn");
-  const phoneInput = document.getElementById("phoneInput");
-  const otpModal = document.getElementById("otpModal");
-  const otpInput = document.getElementById("otpInput");
-  const otpVerifyBtn = document.getElementById("otpVerifyBtn");
-  const toast = document.getElementById("toast");
-
-  const showToast = (msg, error = false) => {
-    toast.textContent = msg;
-    toast.style.backgroundColor = error ? "#c0392b" : "#222";
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 3000);
-  };
-
-  window.recaptchaVerifier = new RecaptchaVerifier(
-    "recaptcha-container",
-    { size: "invisible" },
-    auth
-  );
-
-  loginBtn.addEventListener("click", () => {
-    const phoneNumber = phoneInput.value.trim();
-    if (!phoneNumber.startsWith("+")) {
-      showToast("Include country code, e.g. +60123456789", true);
-      return;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Firebase Phone Auth</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 400px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #0A0A0A;
+      color: #FFF;
     }
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background: #1A1A1A;
+      color: #FFF;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #FF6B35;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background: #FF8E53;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal.active {
+      display: flex;
+    }
+    .modal-content {
+      background: #1A1A1A;
+      padding: 30px;
+      border-radius: 12px;
+      max-width: 300px;
+    }
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #222;
+      color: white;
+      padding: 15px 25px;
+      border-radius: 8px;
+      display: none;
+    }
+    #toast.show {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="loginContainer">
+    <h1>🏎️ KartTime Login</h1>
+    <input 
+      type="tel" 
+      id="phoneInput" 
+      placeholder="+60123456789"
+    />
+    <button id="loginBtn">Send OTP</button>
+    
+    <!-- ✅ reCAPTCHA container (required!) -->
+    <div id="recaptcha-container"></div>
+  </div>
 
-    signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier)
-      .then((confirmationResult) => {
-        window.confirmationResult = confirmationResult;
-        otpModal.classList.add("active");
-        showToast("OTP sent! Please check SMS 📱");
-      })
-      .catch((error) => showToast(error.message, true));
-  });
+  <!-- OTP Modal -->
+  <div id="otpModal" class="modal">
+    <div class="modal-content">
+      <h2>Enter OTP</h2>
+      <input 
+        type="text" 
+        id="otpInput" 
+        placeholder="123456"
+        maxlength="6"
+      />
+      <button id="otpVerifyBtn">Verify</button>
+    </div>
+  </div>
 
-  otpVerifyBtn.addEventListener("click", async () => {
-    const code = otpInput.value.trim();
-    if (!code) return showToast("Enter OTP code", true);
+  <div id="toast"></div>
 
-    try {
-      const result = await window.confirmationResult.confirm(code);
-      const user = result.user;
+  <script type="module">
+    // ✅ Use version 10.7.1 (stable)
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
+    import {
+      getAuth,
+      RecaptchaVerifier,
+      signInWithPhoneNumber,
+    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import {
+      getFirestore,
+      doc,
+      setDoc,
+      getDoc,
+      serverTimestamp,
+    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-      // ⭐ Firestore: Create/Update Racer Profile
-      const userRef = doc(db, "racers", user.uid);
-      const existingUser = await getDoc(userRef);
+    const firebaseConfig = {
+      
+      authDomain: "sevenrooksracing.firebaseapp.com",
+      projectId: "sevenrooksracing",
+      storageBucket: "sevenrooksracing.appspot.com",
+      messagingSenderId: "177100162137",
+      appId: "1:177100162137:web:6be81ba3c54d5342bfdd48",
+      measurementId: "G-3BPXWL6BC6"
+    };
 
-      if (!existingUser.exists()) {
-        // ⭐ First login — create profile
-        await setDoc(userRef, {
-          phoneNumber: user.phoneNumber,
-          createdAt: serverTimestamp(),
-          lastLogin: serverTimestamp(),
-          displayName: null,
-          fastestLap: null,
-          racesCompleted: 0,
-        });
-      } else {
-        // ⭐ Update only last login time
-        await setDoc(
-          userRef,
-          { lastLogin: serverTimestamp() },
-          { merge: true }
-        );
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const loginBtn = document.getElementById("loginBtn");
+    const phoneInput = document.getElementById("phoneInput");
+    const otpModal = document.getElementById("otpModal");
+    const otpInput = document.getElementById("otpInput");
+    const otpVerifyBtn = document.getElementById("otpVerifyBtn");
+    const toast = document.getElementById("toast");
+
+    const showToast = (msg, error = false) => {
+      toast.textContent = msg;
+      toast.style.backgroundColor = error ? "#c0392b" : "#222";
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3000);
+    };
+
+    // ✅ Initialize reCAPTCHA after page loads
+    window.recaptchaVerifier = new RecaptchaVerifier(
+      auth,
+      "recaptcha-container",
+      { size: "invisible" }
+    );
+
+    loginBtn.addEventListener("click", async () => {
+      const phoneNumber = phoneInput.value.trim();
+      
+      if (!phoneNumber.startsWith("+")) {
+        showToast("Include country code, e.g. +60123456789", true);
+        return;
       }
 
-      otpModal.classList.remove("active");
-      showToast("Welcome, Racer! 🏎️");
+      try {
+        const confirmationResult = await signInWithPhoneNumber(
+          auth, 
+          phoneNumber, 
+          window.recaptchaVerifier
+        );
+        
+        window.confirmationResult = confirmationResult;
+        otpModal.classList.add("active");
+        showToast("OTP sent! Check SMS 📱");
+      } catch (error) {
+        console.error("Phone auth error:", error);
+        showToast(error.message, true);
+        
+        // Reset reCAPTCHA on error
+        window.recaptchaVerifier.render().then(widgetId => {
+          grecaptcha.reset(widgetId);
+        });
+      }
+    });
 
-      document.getElementById("loginContainer").innerHTML = `
-        <h1>Welcome 🏁</h1>
-        <p><strong>Phone:</strong> ${user.phoneNumber}</p>
-        <button onclick="logout()">Logout</button>
-      `;
-    } catch (error) {
-      console.error(error);
-      showToast("Invalid OTP ❌", true);
-    }
-  });
+    otpVerifyBtn.addEventListener("click", async () => {
+      const code = otpInput.value.trim();
+      
+      if (!code || code.length !== 6) {
+        showToast("Enter 6-digit OTP", true);
+        return;
+      }
 
-  window.logout = () => {
-    localStorage.removeItem("kartUser");
-    location.reload();
-  };
-</script>
+      try {
+        const result = await window.confirmationResult.confirm(code);
+        const user = result.user;
+
+        // Create/update user in Firestore
+        const userRef = doc(db, "racers", user.uid);
+        const existingUser = await getDoc(userRef);
+
+        if (!existingUser.exists()) {
+          await setDoc(userRef, {
+            phoneNumber: user.phoneNumber,
+            createdAt: serverTimestamp(),
+            lastLogin: serverTimestamp(),
+            displayName: null,
+            fastestLap: null,
+            racesCompleted: 0,
+          });
+        } else {
+          await setDoc(
+            userRef,
+            { lastLogin: serverTimestamp() },
+            { merge: true }
+          );
+        }
+
+        otpModal.classList.remove("active");
+        showToast("Welcome, Racer! 🏎️");
+
+        document.getElementById("loginContainer").innerHTML = `
+          <h1>Welcome 🏁</h1>
+          <p><strong>Phone:</strong> ${user.phoneNumber}</p>
+          <button onclick="location.reload()">Logout</button>
+        `;
+      } catch (error) {
+        console.error("OTP verification error:", error);
+        showToast("Invalid OTP ❌", true);
+      }
+    });
+  </script>
+</body>
+</html>
