@@ -1,236 +1,56 @@
-apiKey: "AIzaSyBVnIJmmXzFyILf13im-y9KfCZrZ8PNpu8",
-
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Firebase Phone Auth</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 400px;
-      margin: 50px auto;
-      padding: 20px;
-      background: #0A0A0A;
-      color: #FFF;
-    }
-    input {
-      width: 100%;
-      padding: 12px;
-      margin: 10px 0;
-      border-radius: 8px;
-      border: 1px solid #333;
-      background: #1A1A1A;
-      color: #FFF;
-    }
-    button {
-      width: 100%;
-      padding: 12px;
-      background: #FF6B35;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: bold;
-    }
-    button:hover {
-      background: #FF8E53;
-    }
-    .modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.8);
-      justify-content: center;
-      align-items: center;
-    }
-    .modal.active {
-      display: flex;
-    }
-    .modal-content {
-      background: #1A1A1A;
-      padding: 30px;
-      border-radius: 12px;
-      max-width: 300px;
-    }
-    #toast {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #222;
-      color: white;
-      padding: 15px 25px;
-      border-radius: 8px;
-      display: none;
-    }
-    #toast.show {
-      display: block;
-    }
-  </style>
-</head>
-<body>
-  <div id="loginContainer">
-    <h1>🏎️ KartTime Login</h1>
-    <input 
-      type="tel" 
-      id="phoneInput" 
-      placeholder="+60123456789"
-    />
-    <button id="loginBtn">Send OTP</button>
-    
-    <!-- ✅ reCAPTCHA container (required!) -->
-    <div id="recaptcha-container"></div>
-  </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>7RooksRacing Login</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
 
-  <!-- OTP Modal -->
-  <div id="otpModal" class="modal">
-    <div class="modal-content">
-      <h2>Enter OTP</h2>
-      <input 
-        type="text" 
-        id="otpInput" 
-        placeholder="123456"
-        maxlength="6"
-      />
-      <button id="otpVerifyBtn">Verify</button>
+  <body>
+    <!-- Login Screen -->
+    <div id="loginContainer" class="container">
+      <h1>7RooksRacing</h1>
+      <p class="subtitle">Enter your phone number to log in</p>
+
+      <div class="input-group">
+        <input type="text" id="phoneNumber" placeholder="+60123456789" />
+      </div>
+
+      <div id="recaptcha-container"></div>
+      <button id="sendOtpBtn">Send OTP</button>
     </div>
-  </div>
 
-  <div id="toast"></div>
+    <!-- OTP Modal -->
+    <div id="otpModal" class="modal">
+      <div class="modal-content">
+        <h2>Verify OTP</h2>
+        <p class="subtitle">Check your phone for a 6-digit code</p>
+        <input type="text" id="otpInput" placeholder="Enter OTP" maxlength="6" />
+        <button id="otpVerifyBtn">Verify</button>
+      </div>
+    </div>
 
-  <script type="module">
-    // ✅ Use version 10.7.1 (stable)
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
-    import {
-      getAuth,
-      RecaptchaVerifier,
-      signInWithPhoneNumber,
-    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-    import {
-      getFirestore,
-      doc,
-      setDoc,
-      getDoc,
-      serverTimestamp,
-    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    <!-- Username Modal -->
+    <div id="usernameModal" class="modal">
+      <div class="modal-content">
+        <h2>Welcome Racer!</h2>
+        <p class="subtitle">Set your racer name 🏁</p>
+        <input type="text" id="usernameInput" placeholder="Your Name" />
+        <div class="modal-buttons">
+          <button id="skipUsernameBtn" class="btn-secondary">Skip</button>
+          <button id="saveUsernameBtn">Save</button>
+        </div>
+      </div>
+    </div>
 
-    const firebaseConfig = {
-      
-      authDomain: "sevenrooksracing.firebaseapp.com",
-      projectId: "sevenrooksracing",
-      storageBucket: "sevenrooksracing.appspot.com",
-      messagingSenderId: "177100162137",
-      appId: "1:177100162137:web:6be81ba3c54d5342bfdd48",
-      measurementId: "G-3BPXWL6BC6"
-    };
+    <!-- Welcome Screen -->
+    <div id="welcomeContainer" class="container hidden">
+      <h1>Welcome!</h1>
+      <div id="userInfo" class="userinfo"></div>
+      <button id="logoutBtn" class="btn-secondary">Logout</button>
+    </div>
 
-    const app = initializeApp(firebaseConfig);
-    const analytics = getAnalytics(app);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
-    const loginBtn = document.getElementById("loginBtn");
-    const phoneInput = document.getElementById("phoneInput");
-    const otpModal = document.getElementById("otpModal");
-    const otpInput = document.getElementById("otpInput");
-    const otpVerifyBtn = document.getElementById("otpVerifyBtn");
-    const toast = document.getElementById("toast");
-
-    const showToast = (msg, error = false) => {
-      toast.textContent = msg;
-      toast.style.backgroundColor = error ? "#c0392b" : "#222";
-      toast.classList.add("show");
-      setTimeout(() => toast.classList.remove("show"), 3000);
-    };
-
-    // ✅ Initialize reCAPTCHA after page loads
-    window.recaptchaVerifier = new RecaptchaVerifier(
-      auth,
-      "recaptcha-container",
-      { size: "invisible" }
-    );
-
-    loginBtn.addEventListener("click", async () => {
-      const phoneNumber = phoneInput.value.trim();
-      
-      if (!phoneNumber.startsWith("+")) {
-        showToast("Include country code, e.g. +60123456789", true);
-        return;
-      }
-
-      try {
-        const confirmationResult = await signInWithPhoneNumber(
-          auth, 
-          phoneNumber, 
-          window.recaptchaVerifier
-        );
-        
-        window.confirmationResult = confirmationResult;
-        otpModal.classList.add("active");
-        showToast("OTP sent! Check SMS 📱");
-      } catch (error) {
-        console.error("Phone auth error:", error);
-        showToast(error.message, true);
-        
-        // Reset reCAPTCHA on error
-        window.recaptchaVerifier.render().then(widgetId => {
-          grecaptcha.reset(widgetId);
-        });
-      }
-    });
-
-    otpVerifyBtn.addEventListener("click", async () => {
-      const code = otpInput.value.trim();
-      
-      if (!code || code.length !== 6) {
-        showToast("Enter 6-digit OTP", true);
-        return;
-      }
-
-      try {
-        const result = await window.confirmationResult.confirm(code);
-        const user = result.user;
-
-        // Create/update user in Firestore
-        const userRef = doc(db, "racers", user.uid);
-        const existingUser = await getDoc(userRef);
-
-        if (!existingUser.exists()) {
-          await setDoc(userRef, {
-            phoneNumber: user.phoneNumber,
-            createdAt: serverTimestamp(),
-            lastLogin: serverTimestamp(),
-            displayName: null,
-            fastestLap: null,
-            racesCompleted: 0,
-          });
-        } else {
-          await setDoc(
-            userRef,
-            { lastLogin: serverTimestamp() },
-            { merge: true }
-          );
-        }
-
-        otpModal.classList.remove("active");
-        showToast("Welcome, Racer! 🏎️");
-
-        document.getElementById("loginContainer").innerHTML = `
-          <h1>Welcome 🏁</h1>
-          <p><strong>Phone:</strong> ${user.phoneNumber}</p>
-          <button onclick="location.reload()">Logout</button>
-        `;
-      } catch (error) {
-        console.error("OTP verification error:", error);
-        showToast("Invalid OTP ❌", true);
-      }
-    });
-  </script>
-</body>
+    <script type="module" src="./main.js"></script>
+  </body>
 </html>
